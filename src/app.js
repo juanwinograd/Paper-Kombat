@@ -2,13 +2,15 @@ import { HEROES,STAGES,VERSION } from './content.js';
 import { createMatch,step,createAI,cleanInput } from './engine.js';
 import { Renderer,portrait,artReady } from './render.js';
 import { Controls } from './input.js';
-import { OnlineRoom,validCode } from './network.js';
+import { OnlineRoom,validCode,RESUME_WINDOW,makeSession } from './network.js';
+import { saveSession,readSession,clearSession } from './session.js';
 import { Sound } from './audio.js';
 const $=id=>document.getElementById(id);
 let screen='home',mode='cpu',heroes=[0,3],stage=0,selectedSide=0,localSide=0;
 let match=null,ai=createAI(),room=null,ready=[false,false],remoteInput=cleanInput(),remoteInputAt=0;
 let accumulator=0,previousTime=performance.now(),lastStateSent=0,lastInputSent=0,lastSnapshot=0,seenEvent=0;
-let networkFailed=false,startingRoom=false,toastTimer,announcedPhase='',winSound=false;
+let networkFailed=false,startingRoom=false,toastTimer,announcedPhase='',winSound=false,lastPersist=0;
+let sessionStore=null;try{sessionStore=window.sessionStorage;}catch{}
 const sound=new Sound(),renderer=new Renderer($('fight-canvas')),poster=new Renderer($('poster'));
 const coarse=matchMedia('(pointer:coarse)').matches||navigator.maxTouchPoints>0;
 document.body.classList.toggle('touch',coarse);
@@ -31,7 +33,9 @@ function setupMode(value){
 }
 document.querySelectorAll('[data-mode]').forEach(b=>b.addEventListener('click',()=>setupMode(b.dataset.mode)));
 function leaveRoom(){
-  if(room){room.send({type:'leave'});room.close();room=null;}
+  clearSession(sessionStore);
+  if(location.hash.startsWith('#sala='))history.replaceState(null,'',location.pathname+location.search);
+  if(room){room.leave();room=null;}
   ready=[false,false];remoteInput=cleanInput();remoteInputAt=0;networkFailed=false;
 }
 function goHome(){leaveRoom();match=null;show('home');}
@@ -70,34 +74,64 @@ $('select-p1').addEventListener('click',()=>{selectedSide=0;renderSelection();})
 $('select-p2').addEventListener('click',()=>{selectedSide=1;renderSelection();});
 function sendSetup(){if(mode==='online'&&room?.isHost&&room.connected)room.send({type:'setup',heroes,stage,ready});}
 function networkProblem(message){
-  networkFailed=true;remoteInput=cleanInput();controls.clear();
+  clearSession(sessionStore);networkFailed=true;remoteInput=cleanInput();controls.clear();
   $('network-status').textContent=message;$('online-panel').classList.add('error');
   $('online-options').hidden=false;$('create-room').disabled=false;$('join-form').querySelector('button').disabled=false;
   if(screen==='arena'&&match){match.paused=true;match.pauseReason='connection';setOverlay('connection',message);}
   else renderSelection();
 }
-async function connectRoom(code=null){
+async function connectRoom(code=null,saved=null){
   if(startingRoom)return;startingRoom=true;
   leaveRoom();mode='online';networkFailed=false;ready=[false,false];
   $('create-room').disabled=true;$('join-form').querySelector('button').disabled=true;$('online-panel').classList.remove('error');
-  $('network-status').textContent=code?'Buscando a tu amigo…':'Dibujando una sala…';
+  $('network-status').textContent=saved?'Volviendo a tu sala…':code?'Buscando a tu amigo…':'Dibujando una sala…';
   const activeRoom=new OnlineRoom();room=activeRoom;
+  if(saved){heroes=saved.heroes;stage=saved.stage;localSide=saved.isHost?0:1;selectedSide=localSide;activeRoom.code=code;if(saved.state)startMatch(saved.state);}
   activeRoom.addEventListener('problem',e=>{if(room===activeRoom)networkProblem(e.detail);});
+  activeRoom.addEventListener('reconnecting',e=>{
+    if(room!==activeRoom)return;
+    networkFailed=true;remoteInput=cleanInput();controls.clear();
+    $('network-status').textContent='Esperando a tu amigo. Conservamos esta sala durante dos minutos.';
+    $('online-panel').classList.remove('error');$('online-options').hidden=true;
+    if(match){match.paused=true;match.pauseReason='reconnect';updateOverlay();}
+    persistRoom();renderSelection();
+  });
   activeRoom.addEventListener('room',e=>{
     if(room!==activeRoom)return;
     localSide=e.detail.isHost?0:1;selectedSide=localSide;
+    history.replaceState(null,'','#sala='+e.detail.code);
     $('room-display').textContent=e.detail.code;$('room-info').hidden=false;$('online-options').hidden=true;
-    $('network-status').textContent=e.detail.isHost?'Compartí la invitación y esperá a tu amigo.':'Conectando los dos dispositivos…';renderSelection();
+    $('network-status').textContent=activeRoom.reconnecting?'Reconectando con tu amigo…':e.detail.isHost?'Compartí la invitación y esperá a tu amigo.':'Conectando los dos dispositivos…';
+    persistRoom();renderSelection();
   });
-  activeRoom.addEventListener('connected',()=>{
+  activeRoom.addEventListener('connected',e=>{
     if(room!==activeRoom)return;
-    $('network-status').textContent='¡Ya están los dos! Elijan personajes y pulsen «Estoy listo».';
-    if(activeRoom.isHost)sendSetup();renderSelection();
+    networkFailed=false;remoteInput=cleanInput();remoteInputAt=performance.now();lastSnapshot=performance.now();controls.clear();
+    $('network-status').textContent=e.detail.rejoined?'¡Volvieron los dos! La misma sala está lista.':'¡Ya están los dos! Elijan personajes y pulsen «Estoy listo».';
+    $('online-panel').classList.remove('error');$('online-options').hidden=true;
+    if(e.detail.rejoined){ready=[false,false];if(match){match.paused=true;match.pauseReason='reconnected';match.fighters.forEach(f=>f.prev=cleanInput());}}
+    if(activeRoom.isHost){if(match)sendRestore();else sendSetup();}
+    else if(match)activeRoom.send({type:'checkpoint',state:match});
+    updateOverlay();persistRoom();renderSelection();
   });
   activeRoom.addEventListener('message',e=>{if(room===activeRoom)onMessage(e.detail);});
   activeRoom.addEventListener('latency',e=>{if(mode==='online'&&screen==='arena')$('fight-mode').textContent='SALA '+activeRoom.code+' · '+e.detail+' ms';});
-  try{await activeRoom.open(code);}catch(error){if(room===activeRoom)networkProblem(error.message);}
-  finally{startingRoom=false;if(networkFailed){$('create-room').disabled=false;$('join-form').querySelector('button').disabled=false;}}
+  try{await activeRoom.open(code,saved?{isHost:saved.isHost,session:saved.session,opponentSession:saved.opponentSession,resume:true,expiresAt:saved.expiresAt}:{});}
+  catch(error){if(room===activeRoom)networkProblem(error.message);}
+  finally{startingRoom=false;if(networkFailed&&!activeRoom.reconnecting){$('create-room').disabled=false;$('join-form').querySelector('button').disabled=false;}}
+}
+function persistRoom(){
+  if(mode!=='online'||!room||room.closed||!(room.connected||room.hasConnected||room.isHost))return;
+  saveSession(sessionStore,{code:room.code,isHost:room.isHost,session:room.session,opponentSession:room.opponentSession,expiresAt:room.reconnecting?room.deadline:Date.now()+RESUME_WINDOW,heroes,stage,state:match});
+}
+function sendRestore(){
+  if(room?.isHost&&room.connected)room.send({type:'restore',heroes,stage,state:match});
+}
+async function restoreSavedRoom(){
+  const saved=readSession(sessionStore);if(!saved)return false;
+  const invitation=location.hash.match(/^#sala=([A-HJ-NP-Z2-9]{8})$/i);
+  if(invitation&&invitation[1].toUpperCase()!==saved.code)return false;
+  setupMode('online');await connectRoom(saved.code,saved);return true;
 }
 $('create-room').addEventListener('click',()=>connectRoom());
 $('join-form').addEventListener('submit',e=>{e.preventDefault();const code=$('room-code').value.trim().toUpperCase();if(!validCode(code)){toast('Usá el código de 8 letras o números de tu amigo.');return;}connectRoom(code);});
@@ -106,22 +140,38 @@ $('copy-room').addEventListener('click',async()=>{
   try{await navigator.clipboard.writeText(url.href);toast('Invitación copiada. ¡Pasásela a tu amigo!');}catch{toast('El código de tu sala es '+room.code);}
 });
 function onMessage(m){
-  if(m.type==='leave'){networkProblem('Tu amigo salió de la sala. Podés volver a invitarlo.');room?.close();return;}
+  if(m.type==='leave'){clearSession(sessionStore);networkProblem('Tu amigo salió de la sala. Podés volver a invitarlo.');room?.close();return;}
   if(room.isHost){
-    if(m.type==='pick'&&screen==='setup'){heroes[1]=m.hero;ready=[false,false];sendSetup();renderSelection();}
+    if(m.type==='pick'&&screen==='setup'){heroes[1]=m.hero;ready=[false,false];sendSetup();persistRoom();renderSelection();}
     if(m.type==='ready'&&screen==='setup'){ready[1]=m.value;sendSetup();renderSelection();maybeStart();}
     if(m.type==='input'&&screen==='arena'){remoteInput=m.input;remoteInputAt=performance.now();}
-    if(m.type==='pause'&&screen==='arena'&&match?.phase!=='matchOver'){match.paused=m.value;match.pauseReason=m.value?'friend':'';controls.clear();room.send({type:'state',state:match});updateOverlay();}
+    if(m.type==='pause'&&screen==='arena'&&match?.phase!=='matchOver'){
+      match.paused=m.value;match.pauseReason=m.value?'friend':'';controls.clear();room.send({type:'state',state:match});persistRoom();updateOverlay();
+    }
     if(m.type==='rematch'&&screen==='arena'&&match?.phase==='matchOver'){returnToSelection();sendSetup();}
+    if(m.type==='checkpoint'&&match){
+      const newer=m.state;
+      if(newer.id===match.id&&newer.clock>match.clock&&newer.stage===stage&&newer.fighters.every((f,i)=>f.hero===heroes[i]))match=structuredClone(newer);
+      match.paused=true;match.pauseReason='reconnected';match.fighters.forEach(f=>f.prev=cleanInput());
+      sendRestore();persistRoom();updateHUD();updateOverlay();
+    }
   }else{
-    if(m.type==='setup'){heroes=m.heroes;stage=m.stage;ready=m.ready;if(screen==='arena')returnToSelection(false);renderSelection();}
-    if(m.type==='start'&&screen==='setup'){heroes=m.heroes;stage=m.stage;startMatch();}
+    if(m.type==='setup'){heroes=m.heroes;stage=m.stage;ready=m.ready;if(screen==='arena')returnToSelection(false);persistRoom();renderSelection();}
+    if(m.type==='start'&&screen==='setup'){heroes=m.heroes;stage=m.stage;startMatch();if(typeof m.id==='string')match.id=m.id;persistRoom();}
+    if(m.type==='restore'){
+      heroes=m.heroes;stage=m.stage;networkFailed=false;lastSnapshot=performance.now();
+      if(m.state){
+        if(screen!=='arena'||!match||match.id!==m.state.id)startMatch(m.state);else match=m.state;
+        updateHUD();updateOverlay();
+      }else{returnToSelection();renderSelection();}
+      persistRoom();
+    }
     if(m.type==='state'&&screen==='arena'&&match){match=m.state;lastSnapshot=performance.now();updateHUD();updateOverlay();}
   }
 }
 function maybeStart(){
   if(room?.isHost&&room.connected&&ready.every(Boolean)&&screen==='setup'){
-    room.send({type:'start',heroes,stage});startMatch();
+    startMatch();room.send({type:'start',heroes,stage,id:match.id});
   }
 }
 $('start').addEventListener('click',()=>{
@@ -145,15 +195,15 @@ function buildPowerPanels(){
   // Keep the local player's powers first on narrow screens.
   $('powers-'+localSide).style.order='0';$('powers-'+(1-localSide)).style.order='1';
 }
-function startMatch(){
-  match=createMatch(heroes,stage);ai=createAI($('difficulty').value);remoteInput=cleanInput();remoteInputAt=performance.now();lastSnapshot=performance.now();lastStateSent=0;lastInputSent=0;seenEvent=0;announcedPhase='';winSound=false;networkFailed=false;
+function startMatch(savedState=null){
+  match=savedState?structuredClone(savedState):createMatch(heroes,stage);if(!savedState)match.id=crypto.randomUUID?.()??makeSession();ai=createAI($('difficulty').value);remoteInput=cleanInput();remoteInputAt=performance.now();lastSnapshot=performance.now();lastStateSent=0;lastInputSent=0;seenEvent=0;announcedPhase='';winSound=false;networkFailed=false;
   $('fight-overlay').hidden=true;buildPowerPanels();show('arena');sound.unlock();
   $('fight-mode').textContent=mode==='online'?'SALA '+room.code:mode==='cpu'?'CONTRA LA PC · '+$('difficulty').selectedOptions[0].text:'DOS AMIGOS · MISMA PANTALLA';
   $('keyboard-help').textContent=mode==='local'?'J1: A/D · W · F golpe · G defensa · 1/2/3/4 poderes    |    J2: ←/→ · ↑ · K golpe · L defensa · 7/8/9/0 poderes':'A/D mover · W saltar · F golpe · G defensa · 1/2/3/4 poderes · Esc pausa';
-  updateHUD();renderer.render(match,localSide);
+  updateHUD();renderer.render(match,localSide);if(!savedState)persistRoom();
 }
 function returnToSelection(reset=true){
-  controls.clear();match=null;if(reset)ready=[false,false];show('setup');renderSelection();
+  controls.clear();match=null;if(reset)ready=[false,false];show('setup');persistRoom();renderSelection();
 }
 function updateHUD(){
   if(!match)return;
@@ -174,15 +224,18 @@ function setOverlay(kind,description=''){
   $('fight-overlay').hidden=!kind;
   if(!kind)return;
   $('resume').hidden=kind!=='pause';$('rematch').hidden=kind!=='victory';
-  $('change-characters').textContent=kind==='connection'?'Volver a crear una sala':'Elegir personajes';
+  $('change-characters').textContent=kind==='connection'?'Salir de la sala':'Elegir personajes';
   $('overlay-eyebrow').textContent=kind==='victory'?'FIN DE LA HISTORIETA':kind==='connection'?'PAUSA DE CONEXIÓN':'UN RESPIRO';
   $('overlay-title').textContent=kind==='victory'?'¡Ganó '+HEROES[match.fighters[match.winner].hero].name+'!':kind==='connection'?'Se cortó la conexión':'Pausa';
-  $('overlay-description').textContent=description||(kind==='victory'?'Dos rounds y un montón de ¡PAF! ¿Jugamos otra?':match.pauseReason==='friend'?'Tu amigo puso pausa. Pueden seguir cuando estén listos.':'Los poderes también se toman un descanso.');
+  $('overlay-description').textContent=description||(kind==='victory'?'Dos rounds y un montón de ¡PAF! ¿Jugamos otra?':match.pauseReason==='reconnected'?'¡Volvieron los dos! Conservamos la vida y los rounds. Toquen «Seguir peleando».':match.pauseReason==='friend'?'Tu amigo puso pausa. Pueden seguir cuando estén listos.':'Los poderes también se toman un descanso.');
   if(kind==='victory'&&!winSound){sound.play('win');winSound=true;$('match-status').textContent=$('overlay-title').textContent;}
 }
 function updateOverlay(){
   if(!match)return;
-  if(networkFailed){setOverlay('connection','La partida se detuvo. Volvé a invitar a tu amigo para jugar otra.');return;}
+  if(networkFailed){
+    const remaining=Math.max(0,Math.ceil(((room?.deadline??0)-Date.now())/1000));
+    setOverlay('connection',room?.reconnecting?'Guardamos la partida y la sala '+room.code+'. Tu amigo puede volver a esta pestaña. Esperamos '+remaining+' segundos.':$('network-status').textContent);return;
+  }
   setOverlay(match.phase==='matchOver'?'victory':match.paused?'pause':'');
 }
 function togglePause(force){
@@ -190,7 +243,7 @@ function togglePause(force){
   const value=typeof force==='boolean'?force:!match.paused;
   controls.clear();
   if(mode==='online'&&!room?.isHost){room.send({type:'pause',value});return;}
-  match.paused=value;match.pauseReason=value?'local':'';if(mode==='online'&&room?.isHost)room.send({type:'state',state:match});updateOverlay();
+  match.paused=value;match.pauseReason=value?'local':'';if(mode==='online'&&room?.isHost)room.send({type:'state',state:match});persistRoom();updateOverlay();
 }
 $('pause').addEventListener('click',()=>togglePause());$('resume').addEventListener('click',()=>togglePause(false));
 $('exit-fight').addEventListener('click',()=>{if(mode==='online')setupMode('online');else returnToSelection();});
@@ -214,7 +267,13 @@ document.addEventListener('visibilitychange',()=>{
 });
 window.addEventListener('gamepadconnected',()=>toast('Mando conectado. ¡Listo para jugar!'));
 window.addEventListener('gamepaddisconnected',()=>{controls.clear();if(screen==='arena')togglePause(true);toast('Se desconectó un mando.');});
-window.addEventListener('pagehide',()=>leaveRoom());
+window.addEventListener('pagehide',()=>{
+  if(mode!=='online'||!room||room.closed)return;
+  controls.clear();
+  if(match&&match.phase!=='matchOver'){match.paused=true;match.pauseReason='reconnect';if(room.isHost)room.send({type:'state',state:match});else room.send({type:'pause',value:true});}
+  persistRoom();room.close();
+});
+window.addEventListener('pageshow',e=>{if(e.persisted&&mode==='online'&&room?.closed){room=null;restoreSavedRoom();}});
 function frame(now){
   const elapsed=Math.min(.1,(now-previousTime)/1000);previousTime=now;
   if(screen==='arena'&&match){
@@ -228,14 +287,15 @@ function frame(now){
       if(mode==='online'&&room?.connected&&now-lastStateSent>50){room.send({type:'state',state:match});lastStateSent=now;}
     }else if(room?.connected){
       if(now-lastInputSent>33){room.send({type:'input',input:input[localSide]});lastInputSent=now;}
-      if(now-lastSnapshot>4000&&!match.paused&&!networkFailed)networkProblem('La partida dejó de responder. Probá volver a entrar a la sala.');
+      if(now-lastSnapshot>4000&&!match.paused&&!networkFailed)room.reconnect();
     }
     renderer.render(match,localSide);updateHUD();updateOverlay();
     for(const e of match.effects)if(e.id>seenEvent){sound.play(e.kind);seenEvent=e.id;}
   }
+  if(now-lastPersist>1000){persistRoom();lastPersist=now;}
   requestAnimationFrame(frame);
 }
 await Promise.all([artReady,document.fonts.ready]);poster.poster(0);
 requestAnimationFrame(frame);
 const invitation=location.hash.match(/^#sala=([A-HJ-NP-Z2-9]{8})$/i);
-if(invitation){setupMode('online');$('room-code').value=invitation[1].toUpperCase();$('network-status').textContent='Te invitaron a una sala. Tocá «Entrar» para conectarte.';}
+if(!(await restoreSavedRoom())&&invitation){setupMode('online');$('room-code').value=invitation[1].toUpperCase();$('network-status').textContent='Te invitaron a una sala. Tocá «Entrar» para conectarte.';}

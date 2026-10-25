@@ -38,6 +38,6 @@ export const STAGES = [
 ];
 export const WIDTH=960, HEIGHT=540, FLOOR=450;
 export const RULES={health:100,roundSeconds:60,wins:2};
-export const VERSION='paper-kombat-1';
+export const VERSION='paper-kombat-2';
 export const heroIndex = value => Number.isInteger(value) && value>=0 && value<HEROES.length;
 export const stageIndex = value => Number.isInteger(value) && value>=0 && value<STAGES.length;

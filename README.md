@@ -34,7 +34,9 @@ El workflow de verificación comprueba sintaxis, reglas, protocolo y build con c
 5. Ambos pulsan **Estoy listo**.
 6. Para la revancha vuelven a la selección y ambos confirman otra vez.
 
-Mantener las pestañas abiertas. Al ocultar una pestaña durante el combate se pide pausa. Si se pierde la conexión, la partida se detiene. Las salas admiten dos jugadores y no conservan resultados ni datos personales.
+Si alguien recarga, sale por accidente y vuelve con Atrás a la misma pestaña, o pierde la conexión brevemente, la sala se reserva durante **dos minutos**. La partida queda pausada y se conservan personajes, vida, reloj y rounds. Al volver los dos, tocar **Seguir peleando**. Funciona también si quien recarga es el anfitrión, e incluso si ambos recargan.
+
+El retorno automático usa un guardado temporal de esa pestaña; no funciona desde otro navegador o dispositivo, ni si el navegador bloquea el almacenamiento. Al ocultar la pestaña se pide pausa. Elegir **Salir** dentro del juego cierra la sesión de forma definitiva; al vencer los dos minutos también se libera. La invitación sigue usando el mismo código durante la espera.
 
 **Límite del alojamiento gratuito:** el online usa la señalización pública gratuita de PeerJS y conexiones WebRTC directas con STUN. No se incluye un servicio TURN de pago. Algunas redes móviles, escolares, corporativas o con NAT restrictivo no permiten la conexión directa; se informa el problema y se puede probar otra red. El servicio público no garantiza disponibilidad. No se promete conexión entre cualquier par de redes.
 
@@ -98,11 +100,12 @@ Instalar Playwright solo para las pruebas:
 npm install --no-save playwright
 npx playwright install chromium
 npm run test:browser
+npm run test:reconnect
 ~~~
 
 CHROMIUM_PATH permite usar un Chrome instalado; PLAYWRIGHT_MODULE indica una instalación existente de Playwright. TEST_OFFLINE=1 sirve los recursos desde memoria para pruebas aisladas donde el navegador no puede acceder a localhost. TEST_ONLINE=1 agrega una prueba real con dos navegadores y el servicio público; requiere acceso WebRTC. El transporte simulado no sustituye una prueba entre redes físicas distintas.
 
-Se revisan selección espejo, ambos teclados, CPU, poderes, pausa, ayuda, rutas de Pages y tamaños 320, 390 y 768 px. Las capturas de diagnóstico quedan en test-results/, ignoradas por Git.
+Se revisan selección espejo, ambos teclados, CPU, poderes, pausa, ayuda, rutas de Pages y tamaños 320, 390 y 768 px. La prueba test:reconnect recorre dos pestañas con un transporte de prueba: recarga del invitado, recarga del anfitrión, salir y volver con Atrás, recarga simultánea y continuidad del marcador. Esta prueba no contacta PeerJS ni certifica WebRTC entre redes externas. Las capturas de diagnóstico quedan en test-results/, ignoradas por Git.
 
 ## Estructura y procedencia
 

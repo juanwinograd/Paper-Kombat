@@ -28,7 +28,9 @@ Sin torneo. Victoria al ganar dos rounds de 60 segundos. Igualdad de vida al ter
 
 Anfitrión: simulación a 60 pasos/s y estados a 20 Hz. Invitado: controles a 30 Hz. Validación de versión, selección, estructura y rangos básicos. Sin texto libre, chat, voz ni nombres personales.
 
-Código aleatorio de ocho caracteres sin ambigüedades. Invitación con fragmento URL. Máximo dos conexiones. Ambos confirman antes de empezar. Entradas remotas caducan si no llegan. Desconexión o pérdida de estado detienen la partida. Ocultar la pestaña pide pausa.
+Código aleatorio de ocho caracteres sin ambigüedades. Invitación con fragmento URL. Máximo dos conexiones. Ambos confirman antes de empezar. Entradas remotas caducan si no llegan. Una desconexión o pérdida de estado pausa la partida y reserva la sala durante dos minutos. El invitado reintenta automáticamente; el anfitrión conserva o recupera el mismo identificador. Un token privado por jugador permite volver al asiento original sin admitir a un tercero durante la espera.
+
+Un guardado temporal en sessionStorage conserva identidad, selección y último estado. Recargar o volver con Atrás en la misma pestaña recupera sala y partida, incluso para el anfitrión. Se compara el identificador de partida y el reloj de ambos checkpoints para recuperar el estado más reciente. Siempre se vuelve en pausa y hace falta pulsar Seguir peleando. No se extiende el plazo mientras falta un jugador. Salir explícitamente o vencer el plazo limpia la sesión. Ocultar la pestaña pide pausa.
 
 PeerJS 1.5.5 con señalización pública gratuita, WebRTC directo y STUN. No incluye TURN: ciertas redes restrictivas no pueden conectarse. Se explica el error y se permite reintentar. Sin promesa de conectividad universal ni disponibilidad garantizada.
 

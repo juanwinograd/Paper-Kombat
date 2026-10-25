@@ -9,7 +9,8 @@
     "check": "node scripts/check.mjs",
     "test": "node --test tests/engine.test.js tests/network.test.js",
     "test:browser": "node tests/browser.mjs",
-    "build": "node scripts/build.mjs"
+    "build": "node scripts/build.mjs",
+    "test:reconnect": "node tests/reconnect.mjs"
   },
   "engines": {
     "node": ">=20"

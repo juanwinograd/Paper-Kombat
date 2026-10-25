@@ -10,7 +10,7 @@ export function validCode(code){return typeof code==='string'&&/^[A-HJ-NP-Z2-9]{
 export function validMessage(m){
   if(!m||typeof m!=='object'||Array.isArray(m))return false;
   switch(m.type){
-    case 'hello':return m.version===VERSION;
+    case 'hello':return m.version===VERSION&&validSession(m.session);
     case 'pick':return heroIndex(m.hero);
     case 'setup':return Array.isArray(m.heroes)&&m.heroes.length===2&&m.heroes.every(heroIndex)&&stageIndex(m.stage)&&Array.isArray(m.ready)&&m.ready.length===2&&m.ready.every(v=>typeof v==='boolean');
     case 'ready':case 'pause':return typeof m.value==='boolean';
@@ -18,6 +18,8 @@ export function validMessage(m){
     case 'ping':case 'pong':return Number.isFinite(m.time);
     case 'start':return Array.isArray(m.heroes)&&m.heroes.length===2&&m.heroes.every(heroIndex)&&stageIndex(m.stage);
     case 'state':return validSnapshot(m.state);
+    case 'restore':return Array.isArray(m.heroes)&&m.heroes.length===2&&m.heroes.every(heroIndex)&&stageIndex(m.stage)&&(m.state===null||(validSnapshot(m.state)&&m.state.stage===m.stage&&m.state.fighters.every((f,i)=>f.hero===m.heroes[i])));
+    case 'checkpoint':return validSnapshot(m.state);
     case 'rematch':case 'leave':case 'busy':return true;
     default:return false;
   }
@@ -33,52 +35,134 @@ export function validSnapshot(s){
   }
   return true;
 }
+export const RESUME_WINDOW=120000;
+export function makeSession(){return Array.from(crypto.getRandomValues(new Uint8Array(16)),b=>b.toString(16).padStart(2,'0')).join('');}
+export function validSession(value){return typeof value==='string'&&/^[a-f0-9]{32}$/.test(value);}
 export class OnlineRoom extends EventTarget {
-  constructor(PeerClass=globalThis.Peer,{timeout=12000,heartbeat=1000}={}){
-    super();this.PeerClass=PeerClass;this.timeout=timeout;this.heartbeat=heartbeat;this.peer=null;this.conn=null;this.connected=false;this.isHost=false;this.closed=false;this.lastSeen=0;this.timer=null;this.openTimer=null;
+  constructor(PeerClass=globalThis.Peer,{timeout=12000,heartbeat=1000,retryDelay=1500,resumeWindow=RESUME_WINDOW}={}){
+    super();Object.assign(this,{PeerClass,timeout,heartbeat,retryDelay,resumeWindow});
+    this.peer=null;this.conn=null;this.connected=false;this.isHost=false;this.closed=false;
+    this.session=makeSession();this.opponentSession=null;this.hasConnected=false;this.reconnecting=false;this.deadline=0;
   }
   emit(type,detail){this.dispatchEvent(new CustomEvent(type,{detail}));}
-  async open(code=null){
+  async open(code=null,{isHost=code===null,session=this.session,opponentSession=null,resume=false,expiresAt=0}={}){
     if(!this.PeerClass)throw Error('No se pudo cargar la conexión online. Recargá la página.');
     if(code!==null&&!validCode(code))throw Error('El código debe tener 8 letras o números.');
-    this.isHost=code===null;this.code=code??makeCode();
-    const options={debug:0,secure:true,config:{iceServers:[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun.cloudflare.com:3478'}]}};
-    this.peer=this.isHost?new this.PeerClass(PREFIX+this.code,options):new this.PeerClass(options);
-    this.peer.on('error',error=>{
-      const messages={'peer-unavailable':'No encontramos esa sala. Revisá el código y que tu amigo siga conectado.','unavailable-id':'Ese código ya está ocupado. Volvé a crear la sala.','network':'No pudimos conectar. Probá otra red y volvé a intentarlo.','browser-incompatible':'Este navegador no permite la conexión online. Probá uno actualizado.'};
-      this.emit('problem',messages[error.type]??'La conexión se interrumpió. Volvé a crear o entrar a una sala.');
-      if(!this.connected)this.close();
-    });
-    this.peer.on('disconnected',()=>{if(!this.closed&&!this.peer.destroyed){try{this.peer.reconnect();}catch{}}});
-    this.peer.on('connection',conn=>{
-      if(!this.isHost||this.conn||conn.metadata?.version!==VERSION){conn.on('open',()=>{conn.send({type:'busy'});setTimeout(()=>conn.close(),200);});return;}
-      this.attach(conn);
-    });
+    if(!validSession(session)||(opponentSession!==null&&!validSession(opponentSession)))throw Error('La sesión guardada no es válida.');
+    this.isHost=isHost;this.code=code??makeCode();this.session=session;this.opponentSession=opponentSession;
+    this.hasConnected=opponentSession!==null;this.restoring=resume;this.closed=false;
     return new Promise((resolve,reject)=>{
-      this.openTimer=setTimeout(()=>{this.close();reject(Error('La sala tardó demasiado en responder. Probá otra conexión.'));},this.timeout);
-      this.peer.on('open',()=>{
-        clearTimeout(this.openTimer);
-        if(!this.isHost)this.attach(this.peer.connect(PREFIX+this.code,{reliable:true,serialization:'json',metadata:{version:VERSION}}));
-        this.emit('room',{code:this.code,isHost:this.isHost});resolve(this.code);
-      });
-      this.peer.on('error',e=>reject(Error(e.type==='peer-unavailable'?'No encontramos esa sala.':'No pudimos abrir la sala. Probá de nuevo.')));
+      this.resolveOpen=resolve;this.rejectOpen=reject;
+      if(resume)this.recover('Volviendo a la sala…',expiresAt);
+      this.createPeer();
     });
   }
+  createPeer(){
+    if(this.closed||this.creatingPeer)return;
+    this.creatingPeer=true;
+    const old=this.peer;this.peer=null;try{old?.destroy();}catch{}
+    const options={debug:0,secure:true,config:{iceServers:[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun.cloudflare.com:3478'}]}};
+    let peer;
+    try{peer=this.isHost?new this.PeerClass(PREFIX+this.code,options):new this.PeerClass(options);}
+    catch{this.creatingPeer=false;this.fail('Este navegador no pudo abrir la conexión online.');return;}
+    this.peer=peer;
+    clearTimeout(this.openTimer);
+    this.openTimer=setTimeout(()=>{
+      if(this.peer!==peer||this.closed)return;
+      this.creatingPeer=false;
+      if(this.reconnecting){this.peer=null;try{peer.destroy();}catch{}}
+      else this.fail('La sala tardó demasiado en responder. Probá otra conexión.');
+    },this.timeout);
+    peer.on('open',()=>{
+      if(this.peer!==peer||this.closed)return;
+      clearTimeout(this.openTimer);this.creatingPeer=false;
+      if(!this.announced){this.announced=true;this.emit('room',{code:this.code,isHost:this.isHost});}
+      this.resolveOpen?.(this.code);this.resolveOpen=null;this.rejectOpen=null;
+      if(!this.isHost)this.dial();
+    });
+    peer.on('error',error=>{
+      if(this.peer!==peer||this.closed)return;
+      clearTimeout(this.openTimer);this.creatingPeer=false;
+      if(error.type==='browser-incompatible'||error.type==='invalid-id'){this.fail('Este navegador no permite la conexión online. Probá uno actualizado.');return;}
+      if(this.hasConnected||this.restoring||this.reconnecting){
+        if(error.type==='unavailable-id'||peer.destroyed){this.peer=null;try{peer.destroy();}catch{}}
+        this.recover('Esperando a que tu amigo vuelva…');return;
+      }
+      const messages={'peer-unavailable':'No encontramos esa sala. Revisá el código y que tu amigo siga conectado.','unavailable-id':'Ese código ya está ocupado. Volvé a crear la sala.','network':'No pudimos conectar. Probá otra red y volvé a intentarlo.'};
+      this.fail(messages[error.type]??'La conexión se interrumpió. Volvé a intentar.');
+    });
+    peer.on('disconnected',()=>{
+      if(this.peer!==peer||this.closed)return;
+      try{if(!peer.destroyed)peer.reconnect();else this.recover();}catch{this.recover();}
+    });
+    peer.on('close',()=>{if(this.peer===peer&&!this.closed){this.peer=null;this.creatingPeer=false;this.recover();}});
+    peer.on('connection',conn=>{
+      if(this.peer!==peer||this.closed)return;
+      const identity=conn.metadata?.session;
+      if(!this.isHost||conn.metadata?.version!==VERSION||!validSession(identity)||(this.opponentSession&&identity!==this.opponentSession)||(this.conn&&!this.opponentSession)){
+        conn.on('open',()=>{conn.send({type:'busy'});setTimeout(()=>conn.close(),200);});return;
+      }
+      // The returning player's private token can replace a stale data channel.
+      if(this.conn)this.dropConnection();
+      this.attach(conn);
+    });
+  }
+  dial(){
+    if(this.closed||this.isHost||this.conn||!this.peer||this.peer.destroyed||this.peer.disconnected||this.creatingPeer)return;
+    try{this.attach(this.peer.connect(PREFIX+this.code,{reliable:true,serialization:'json',metadata:{version:VERSION,session:this.session}}));}
+    catch{this.recover();}
+  }
+  dropConnection(){
+    clearInterval(this.timer);clearTimeout(this.connectionTimer);
+    const conn=this.conn;this.conn=null;this.connected=false;
+    try{conn?.close();}catch{}
+  }
+  recover(message='Esperando a que tu amigo vuelva…',expiresAt=0){
+    if(this.closed)return;
+    if(!this.hasConnected&&!this.restoring){this.fail('No se pudieron conectar los dos dispositivos. Probá otra red.');return;}
+    this.dropConnection();
+    if(!this.reconnecting){
+      this.reconnecting=true;this.deadline=expiresAt||Date.now()+this.resumeWindow;
+      this.emit('reconnecting',{deadline:this.deadline,message});
+      this.expiryTimer=setTimeout(()=>this.fail('Pasaron dos minutos sin reconectar. La sala se cerró.'),Math.max(0,this.deadline-Date.now()));
+      this.retryTimer=setInterval(()=>this.retry(),this.retryDelay);
+    }
+  }
+  retry(){
+    if(this.closed||!this.reconnecting)return;
+    if(Date.now()>=this.deadline){this.fail('Pasaron dos minutos sin reconectar. La sala se cerró.');return;}
+    if(!this.peer||this.peer.destroyed){this.createPeer();return;}
+    if(this.peer.disconnected){try{this.peer.reconnect();}catch{};return;}
+    this.dial();
+  }
+  reconnect(){this.recover();this.retry();}
   attach(conn){
+    if(this.closed)return;
     this.conn=conn;let validated=false,windowStart=Date.now(),count=0;
-    const connectionTimer=this.connectionTimer=setTimeout(()=>{if(!this.connected){this.emit('problem','No se pudieron conectar los dos dispositivos. Probá otra red.');this.close();}},this.timeout);
-    conn.on('open',()=>this.send({type:'hello',version:VERSION}));
+    clearTimeout(this.connectionTimer);
+    this.connectionTimer=setTimeout(()=>{if(this.conn===conn&&!this.connected)this.recover();},this.timeout);
+    conn.on('open',()=>{if(this.conn===conn&&!this.closed)this.send({type:'hello',version:VERSION,session:this.session});});
     conn.on('data',m=>{
-      if(this.closed)return;
+      if(this.closed||this.conn!==conn)return;
       if(Date.now()-windowStart>1000){windowStart=Date.now();count=0;}
       if(++count>150)return;
-      if(m?.type==='busy'){this.emit('problem','La sala ya tiene dos jugadores o usa otra versión.');this.close();return;}
+      if(m?.type==='busy'){this.fail('La sala ya tiene dos jugadores, está reservada para tu amigo o usa otra versión.');return;}
       if(!validMessage(m))return;
       this.lastSeen=Date.now();
       if(m.type==='hello'){
-        if(validated)return;validated=true;this.connected=true;clearTimeout(connectionTimer);
-        this.timer=setInterval(()=>{if(Date.now()-this.lastSeen>7000){this.emit('problem','Perdimos la conexión con tu amigo.');this.close();}else this.send({type:'ping',time:Date.now()});},this.heartbeat);
-        this.emit('connected',{isHost:this.isHost});return;
+        if(validated)return;
+        if((this.opponentSession&&m.session!==this.opponentSession)||(this.isHost&&m.session!==conn.metadata?.session)){
+          this.send({type:'busy'});this.recover();return;
+        }
+        const rejoined=this.reconnecting||this.hasConnected||this.restoring;
+        validated=true;this.opponentSession=m.session;this.connected=true;this.hasConnected=true;this.restoring=false;this.reconnecting=false;this.deadline=0;
+        clearTimeout(this.connectionTimer);clearTimeout(this.expiryTimer);clearInterval(this.retryTimer);clearInterval(this.timer);
+        this.timer=setInterval(()=>{
+          if(this.conn!==conn||this.closed)return;
+          if(Date.now()-this.lastSeen>7000)this.recover();
+          else this.send({type:'ping',time:Date.now()});
+        },this.heartbeat);
+        this.emit('connected',{isHost:this.isHost,rejoined});return;
       }
       if(!validated)return;
       if(m.type==='ping'){this.send({type:'pong',time:m.time});return;}
@@ -86,14 +170,22 @@ export class OnlineRoom extends EventTarget {
       if(m.type==='input')m={type:'input',input:cleanInput(m.input)};
       this.emit('message',m);
     });
-    conn.on('close',()=>{clearTimeout(connectionTimer);if(!this.closed){this.emit('problem','Tu amigo salió de la sala.');this.close();}});
-    conn.on('error',()=>{this.emit('problem','La conexión falló. Probá otra red.');this.close();});
+    conn.on('close',()=>{if(this.conn===conn&&!this.closed)this.recover();});
+    conn.on('error',()=>{if(this.conn===conn&&!this.closed)this.recover();});
   }
   send(message){
     if(this.conn?.open){if(message.type==='state'&&this.conn.bufferSize>2)return;try{this.conn.send(message);}catch{}}
   }
+  leave(){this.send({type:'leave'});setTimeout(()=>this.close(),100);}
+  fail(message){
+    if(this.closed)return;
+    this.rejectOpen?.(Error(message));this.rejectOpen=null;this.resolveOpen=null;
+    this.emit('problem',message);this.close();
+  }
   close(){
-    this.closed=true;this.connected=false;clearInterval(this.timer);clearTimeout(this.openTimer);clearTimeout(this.connectionTimer);
-    try{this.conn?.close();this.peer?.destroy();}catch{}
+    this.closed=true;this.connected=false;this.reconnecting=false;
+    this.resolveOpen?.(this.code);this.resolveOpen=null;this.rejectOpen=null;
+    clearTimeout(this.openTimer);clearTimeout(this.expiryTimer);clearInterval(this.retryTimer);this.dropConnection();
+    const peer=this.peer;this.peer=null;try{peer?.destroy();}catch{}
   }
 }
