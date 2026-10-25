@@ -1,0 +1,17 @@
+{
+  "name": "paper-kombat",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node scripts/server.mjs",
+    "start": "node scripts/server.mjs",
+    "check": "node scripts/check.mjs",
+    "test": "node --test tests/engine.test.js tests/network.test.js",
+    "test:browser": "node tests/browser.mjs",
+    "build": "node scripts/build.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
