@@ -25,3 +25,25 @@
  .secret-panel .secondary{font-size:16px;padding:8px 10px}
  .secret-panel p{font-size:16px}#home-roster{grid-template-columns:repeat(4,1fr)}
 }
+
+.related-games{max-width:1112px;margin:30px auto 0;padding:23px 0 19px;border-top:1.5px dashed var(--line)}
+.related-games h2{margin:0 0 17px;font:800 12px/1.6 Arial,sans-serif;letter-spacing:1.2px}
+.related-games-links{display:flex;gap:20px;flex-wrap:wrap}
+.related-game{display:block;width:210px;max-width:100%;text-decoration:none}
+.related-game img{display:block;width:100%;height:auto;aspect-ratio:16/9;object-fit:cover;object-position:center;border:1.5px solid var(--ink);background:#fffdf7;box-shadow:2px 3px var(--ink);transition:transform .15s,box-shadow .15s}
+.related-game span{display:block;margin-top:9px;font-size:17px}
+.related-game:hover img{transform:translateY(-2px) rotate(-.5deg);box-shadow:3px 5px var(--ink)}
+.related-game:hover span{text-decoration:underline;text-underline-offset:3px}
+body.playing .related-games{display:none}
+@media(min-width:1500px){.related-games{max-width:1202px}}
+@media(max-width:1180px){.related-games{margin-left:34px;margin-right:34px}}
+@media(max-width:900px){.related-games{margin-left:23px;margin-right:23px}}
+@media(max-width:640px){
+ .related-games{margin:24px 17px 0;padding-top:19px}
+ .related-games h2{font-size:10px;letter-spacing:.8px}
+ .related-games-links{gap:13px;flex-wrap:nowrap}
+ .related-game{width:calc((100% - 13px)/2)}
+ .related-game span{font-size:15px}
+}
+
+@media(max-width:360px){.intro-grid{grid-template-columns:minmax(0,1fr)}.intro-copy{min-width:0}.intro-copy h1{font-size:60px}.title-star{font-size:34px;right:-27px}}
