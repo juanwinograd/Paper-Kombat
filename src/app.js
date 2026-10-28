@@ -5,12 +5,15 @@ import { Controls } from './input.js';
 import { OnlineRoom,validCode,RESUME_WINDOW,makeSession } from './network.js';
 import { saveSession,readSession,clearSession } from './session.js';
 import { Sound } from './audio.js';
+import { matchesSecretCode,readUnlock,saveUnlock,heroAvailable,availableHeroes } from './unlocks.js';
 const $=id=>document.getElementById(id);
 let screen='home',mode='cpu',heroes=[0,3],stage=0,selectedSide=0,localSide=0;
 let match=null,ai=createAI(),room=null,ready=[false,false],remoteInput=cleanInput(),remoteInputAt=0;
 let accumulator=0,previousTime=performance.now(),lastStateSent=0,lastInputSent=0,lastSnapshot=0,seenEvent=0;
 let networkFailed=false,startingRoom=false,toastTimer,announcedPhase='',winSound=false,lastPersist=0;
 let sessionStore=null;try{sessionStore=window.sessionStorage;}catch{}
+let unlockStore=null;try{unlockStore=window.localStorage;}catch{}
+let secretsUnlocked=readUnlock(unlockStore);
 const sound=new Sound(),renderer=new Renderer($('fight-canvas')),poster=new Renderer($('poster'));
 const coarse=matchMedia('(pointer:coarse)').matches||navigator.maxTouchPoints>0;
 document.body.classList.toggle('touch',coarse);
@@ -22,9 +25,24 @@ function show(next){
   document.body.classList.toggle('playing',next==='arena');controls.clear();window.scrollTo(0,0);accumulator=0;previousTime=performance.now();
 }
 function makePortrait(hero){const c=document.createElement('canvas');c.setAttribute('aria-hidden','true');portrait(c,hero);return c;}
-HEROES.forEach((h,i)=>{const item=document.createElement('div');item.className='mini-hero';item.append(makePortrait(i));const span=document.createElement('span');span.textContent=h.name;item.append(span);$('home-roster').append(item);});
+function renderHomeRoster(){
+  $('home-roster').replaceChildren();
+  for(const i of availableHeroes(secretsUnlocked)){
+    const item=document.createElement('div');item.className='mini-hero';item.append(makePortrait(i));
+    const span=document.createElement('span');span.textContent=HEROES[i].name;item.append(span);$('home-roster').append(item);
+  }
+  $('hero-count').textContent=availableHeroes(secretsUnlocked).length+' personajes.';
+}
+renderHomeRoster();
+document.querySelectorAll('[data-secret-form]').forEach(form=>form.addEventListener('submit',event=>{
+  event.preventDefault();const input=form.querySelector('[data-secret-code]'),status=form.querySelector('[data-secret-status]');
+  if(!matchesSecretCode(input.value)){status.textContent='Ese código no abrió el secreto. Revisalo e intentá de nuevo.';return;}
+  secretsUnlocked=true;const saved=saveUnlock(unlockStore);input.value='';
+  document.querySelectorAll('[data-secret-status]').forEach(p=>p.textContent='¡Desbloqueaste a Wis negro, la Máquina de bobadas y Baltazar!'+(saved?'':' Quedan disponibles mientras esta página siga abierta.'));
+  renderHomeRoster();renderSelection();toast('¡Tres personajes secretos desbloqueados!');
+}));
 function setupMode(value){
-  leaveRoom();mode=value;match=null;ready=[false,false];localSide=0;selectedSide=0;networkFailed=false;
+  leaveRoom();mode=value;heroes=heroes.map((h,i)=>heroAvailable(h,secretsUnlocked)?h:(i===0?0:3));match=null;ready=[false,false];if(value==='online')heroes[1]=3;localSide=0;selectedSide=0;networkFailed=false;
   $('mode-label').textContent=({cpu:'CONTRA LA PC',local:'EN LA MISMA PANTALLA',online:'CON UN AMIGO ONLINE'})[mode];
   $('online-panel').hidden=mode!=='online';$('difficulty-wrap').hidden=mode!=='cpu';$('online-options').hidden=false;$('room-info').hidden=true;
   $('network-status').textContent='Invitá a un amigo. Cada uno juega desde su dispositivo.';$('online-panel').classList.remove('error');
@@ -48,7 +66,8 @@ function renderSelection(){
   $('selection-hint').textContent=mode==='cpu'?'Elegí también el personaje de la PC con la pestaña «Jugador 2».':mode==='local'?'Cada amigo elige desde su pestaña. Pueden usar el mismo personaje.':room?.connected?'Cada uno elige su personaje. Cuando estén listos, ¡a pelear!':'Creá una sala o entrá con el código de tu amigo.';
   $('character-grid').replaceChildren();
   HEROES.forEach((h,i)=>{
-    const button=document.createElement('button');button.className='character-card'+(heroes[selectedSide]===i?' selected':'');
+    if(!heroAvailable(i,secretsUnlocked))return;
+    const button=document.createElement('button');button.className='character-card'+(h.secret?' secret-card':'')+(heroes[selectedSide]===i?' selected':'');
     button.style.setProperty('--hero',h.dark);button.style.setProperty('--tint',h.color+'18');button.setAttribute('aria-label','Elegir a '+h.name);button.setAttribute('aria-pressed',heroes[selectedSide]===i);
     button.append(makePortrait(i));const name=document.createElement('span');name.textContent=h.name;button.append(name);
     const selected=heroes.map((hero,side)=>hero===i?'J'+(side+1):null).filter(Boolean);
@@ -209,7 +228,8 @@ function updateHUD(){
   if(!match)return;
   match.fighters.forEach((f,i)=>{
     const hud=$('hud-'+i),h=HEROES[f.hero];hud.style.setProperty('--hero',h.color);
-    hud.querySelector('strong').textContent=h.name;hud.querySelector('.health-fill').style.width=f.hp+'%';hud.querySelector('.health-value').textContent=Math.ceil(f.hp);
+    hud.setAttribute('aria-label',h.name+(f.laugh>0?', se ríe sin control: '+Math.ceil(f.laugh)+' segundos':f.dance>0?', baila sin control: '+Math.ceil(f.dance)+' segundos':''));
+    hud.querySelector('strong').textContent=h.name;hud.querySelector('.health-fill').style.width=f.hp+'%';hud.querySelector('.health-value').textContent=Math.ceil(f.hp);hud.querySelector('.health-value').style.color=f.hero===8?'#fffdf7':'';
     hud.querySelector('.wins').textContent=[0,1].map(n=>n<match.wins[i]?'●':'○').join('');
     hud.querySelector('.guard-track>div').style.width=f.guardMeter+'%';
     $('powers-'+i).querySelectorAll('.power-button').forEach((b,k)=>{const cd=f.cds[k];b.querySelector('.cooldown-mask').style.height=(cd/h.powers[k].cooldown*100)+'%';const label=b.querySelector('.cooldown-label');label.hidden=cd<=0;label.textContent=Math.ceil(cd)+' s';b.setAttribute('aria-label',h.name+': '+h.powers[k].name+(cd>0?', recarga '+Math.ceil(cd)+' segundos':', listo'));});

@@ -31,7 +31,27 @@ export class Illustrator {
     this.path([[-20,3],[-11,5],[5,6],[21,3],[8,1],[-9,1],[-20,3]],'#b9b3a9',.6);
     c.translate(0,bob-(id===1?0:8));
     if(this.dancing&&!this.reduced)c.rotate(Math.sin(time*7+x*.02)*.12);
-    if(id===7){
+    if(id===8){
+      this.aaron(0,0,color);
+      this.circle(-5,-51,1.5,PAPER,1,PAPER);this.circle(5,-51,1.5,PAPER,1,PAPER);
+      this.path([[-5,-43],[0,-40],[5,-43]],PAPER,1.4);
+    } else if(id===9){
+      this.circle(0,-46,23,color,4,PAPER);
+      this.path([[-21,-43],[-38,-31],[-56,-12]],color,5);
+      this.path([[21,-43],[38,-31],[56,-12]],color,5);
+      this.path([[-56,-12],[-62,-16],[-60,-7]],color,3);
+      this.path([[56,-12],[62,-16],[60,-7]],color,3);
+      this.circle(-8,-51,2.2,color,2,color);this.circle(8,-51,2.2,color,2,color);
+      this.path([[-11,-41],[-7,-34],[0,-32],[7,-34],[11,-41]],color,3);
+    } else if(id===10){
+      const oval=[];for(let i=0;i<48;i++){const a=i/48*tau;oval.push([Math.cos(a)*25,-44+Math.sin(a)*34]);}
+      this.path(oval,color,4,color,true);
+      this.path([[-23,-42],[-36,-29],[-46,-16]],color,5);
+      this.path([[23,-42],[36,-29],[46,-16]],color,5);
+      this.circle(-9,-52,2.3,INK,1,INK);this.circle(6,-52,2.3,INK,1,INK);
+      this.box(9,-46,14,13,'#c6a2e9',INK,2);
+      this.path([[-8,-34],[-2,-30],[6,-32]],INK,2.2);
+    } else if(id===7){
       this.benicio(0,0);
     } else if(id===6){
       this.npc('sebastian',0,0,time);
@@ -113,8 +133,8 @@ export class Illustrator {
     this.path([[x-size,y],[x-size*.75,y-size*.7],[x-size*.1,y-size],[x+size*.8,y-size*.65],[x+size,y],[x,y+size*.15]],'#81715d',2.5,'#cbbda3',true);
     this.path([[x-size*.75,y-size*.7],[x-size*.1,y-size*.35],[x+size*.8,y-size*.65]],'#a18f76',1);
   }
-  aaron(x,y){
-    const color=HEROES[5].color;this.circle(x,y-48,14,color,5,color);
+  aaron(x,y,color=HEROES[5].color){
+    this.circle(x,y-48,14,color,5,color);
     this.line(x,y-32,x,y-4,color,6);this.line(x,y-25,x-13,y-13,color,5);this.line(x,y-25,x+13,y-13,color,5);
     this.path([[x+5,y-62],[x+8,y-67],[x+11,y-66]],INK,2.5);
   }

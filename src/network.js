@@ -28,9 +28,9 @@ export function validSnapshot(s){
   if(!s||!['countdown','fight','roundOver','matchOver'].includes(s.phase)||!stageIndex(s.stage)||!Number.isFinite(s.clock)||!Number.isFinite(s.time)||s.time<0||s.time>60||!Number.isFinite(s.phaseTime)||!Number.isInteger(s.round)||s.round<1||typeof s.paused!=='boolean'||!(s.winner===null||s.winner===0||s.winner===1)||!(s.roundWinner===null||s.roundWinner===0||s.roundWinner===1))return false;
   if(!Array.isArray(s.wins)||s.wins.length!==2||!s.wins.every(v=>Number.isInteger(v)&&v>=0&&v<=2))return false;
   if(!Array.isArray(s.fighters)||s.fighters.length!==2)return false;
-  const nums=['x','y','vx','vy','facing','hp','attackCd','stun','root','slow','blind','invisible','shield','reflect','small','wind','invulnerable','trapImmune','guardMeter','poseTime'];
-  if(!s.fighters.every((f,i)=>heroIndex(f.hero)&&f.side===i&&nums.every(k=>Number.isFinite(f[k]))&&f.hp>=0&&f.hp<=100&&Math.abs(f.x)<2000&&Math.abs(f.y)<2000&&typeof f.pose==='string'&&f.pose.length<30&&Array.isArray(f.cds)&&f.cds.length===4&&f.cds.every(Number.isFinite)&&(!f.pending||(f.pending.kind==='hammer'&&Number.isFinite(f.pending.time)))))return false;
-  for(const [key,max,fields]of [['projectiles',40,['x','y','vx','vy','life','r']],['clones',2,['x','y','life','attackCd']],['effects',35,['id','x','y','life','maxLife']],['hazards',10,['x','timer','r']]]){
+  const nums=['x','y','vx','vy','facing','hp','attackCd','stun','root','slow','blind','laugh','dance','party','controlImmune','invisible','shield','reflect','small','wind','invulnerable','trapImmune','guardMeter','poseTime'];
+  if(!s.fighters.every((f,i)=>heroIndex(f.hero)&&f.side===i&&nums.every(k=>Number.isFinite(f[k]))&&f.hp>=0&&f.hp<=100&&Math.abs(f.x)<2000&&Math.abs(f.y)<2000&&typeof f.pose==='string'&&f.pose.length<30&&Array.isArray(f.cds)&&f.cds.length===4&&f.cds.every(Number.isFinite)&&(!f.pending||(['hammer','party','laugh'].includes(f.pending.kind)&&Number.isFinite(f.pending.time)))))return false;
+  for(const [key,max,fields]of [['projectiles',40,['x','y','vx','vy','life','r']],['clones',4,['x','y','life','attackCd']],['effects',35,['id','x','y','life','maxLife']],['hazards',10,['x','timer','r']]]){
     if(!Array.isArray(s[key])||s[key].length>max||!s[key].every(p=>p&&fields.every(k=>Number.isFinite(p[k]))&&(key==='effects'?typeof p.kind==='string'&&p.kind.length<30&&typeof p.text==='string'&&p.text.length<40&&typeof p.color==='string'&&p.color.length<20:(p.side===0||p.side===1)&&(key==='clones'||heroIndex(p.hero)))))return false;
   }
   return true;

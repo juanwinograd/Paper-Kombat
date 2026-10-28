@@ -1,6 +1,6 @@
 # Paper Kombat
 
-Pelea lateral del universo de **Aventura en Papel**, para chicos de 9 y 10 años: ocho personajes, saltos, superpoderes y golpes de historieta.
+Pelea lateral del universo de **Aventura en Papel**, para chicos de 9 y 10 años: ocho personajes iniciales, tres secretos, saltos, superpoderes y golpes de historieta.
 
 ## Primera versión
 
@@ -8,7 +8,7 @@ Pelea lateral del universo de **Aventura en Papel**, para chicos de 9 y 10 años
 - Dos personas en una computadora: teclado compartido o dos mandos.
 - Dos dispositivos por internet: sala con código e invitación.
 - Controles táctiles con movimiento, salto, golpe, defensa y poderes con recarga.
-- Ocho personajes disponibles, incluso enfrentamientos espejo.
+- Ocho personajes disponibles al comenzar y tres secretos, incluso enfrentamientos espejo.
 - Cuartel, cantera y laboratorio como escenarios decorativos.
 - Vida de 100 puntos; rounds de 60 segundos; gana quien consigue dos rounds. Los empates no dan puntos.
 - Pausa, ayuda, sonido opcional, pantalla completa cuando el navegador lo permite y respeto de reducir movimiento.
@@ -64,15 +64,26 @@ La defensa frontal reduce el daño y gasta una barra que se recupera al soltarla
 | Personaje | Poderes |
 | --- | --- |
 | Vicente | Prisma, rayo regalo, espacio-tiempo. |
-| Fabrizio | Cubo reflector, invisibilidad, picos. Sin fiesta. |
+| Fabrizio | Cubo reflector, invisibilidad, picos y fiesta que hace bailar al rival sin control. |
 | Luca | Rayo eléctrico, tormenta, campo de fuerza, hacerse chiquito. |
 | Gaspar | Brazo elástico, superpuño, teletransporte, Papapumba. |
 | Amaral | Neblina, sol cegador, viento. |
 | Aarón Mamani | Burbuja temporal que ralentiza. |
 | Sebástian | Espada de piedra, martillo de roca, piedra arrojadiza. |
 | Benicio | Un clon autónomo de seis segundos, eliminado de un golpe. |
+| Wis negro (secreto) | Lanzar tinta y crear dos monstruos de tinta temporales. |
+| Máquina de bobadas (secreta) | Ataque de risa: cinco segundos sin poder controlar al personaje. |
+| Baltazar (secreto) | Lanzar cuadrados violetas y camuflarse. |
 
 Prismas y regalos atrapan menos de un segundo, con inmunidad temporal contra cadenas. Atacar cancela invisibilidad. Tormenta y martillo avisan antes de pegar y pueden esquivarse. El clon pega menos y tiene recarga. Los valores están en src/content.js y src/engine.js; el equilibrio definitivo necesita partidas en familia.
+
+## Código secreto
+
+En la barra **Código secreto**, disponible en el inicio y en la selección, escribir **Escuela Bavio 16 12** y pulsar **Desbloquear**. Aparecen Wis negro, la Máquina de bobadas y Baltazar. No se distinguen mayúsculas y minúsculas, y se toleran espacios extra. El desbloqueo se conserva en ese navegador mediante localStorage; si el navegador lo bloquea, funciona mientras la página permanezca abierta.
+
+En una PC compartida habilita los personajes para ambos jugadores. Online, cada jugador desbloquea su propia selección; puede enfrentarse a un personaje secreto aunque todavía no lo haya desbloqueado.
+
+La risa dura cinco segundos y la fiesta de Fabrizio dos segundos y medio. Ambas anuncian el ataque antes de activarse y tienen alcance limitado: alejarse, saltar o cubrirse puede evitarlas. Mientras alguien ríe o baila recibe la mitad del daño; después tiene una breve inmunidad contra repetir estos efectos. El reloj y las recargas siguen avanzando.
 
 ## Desarrollo
 
@@ -101,6 +112,7 @@ npm install --no-save playwright
 npx playwright install chromium
 npm run test:browser
 npm run test:reconnect
+npm run test:secrets
 ~~~
 
 CHROMIUM_PATH permite usar un Chrome instalado; PLAYWRIGHT_MODULE indica una instalación existente de Playwright. TEST_OFFLINE=1 sirve los recursos desde memoria para pruebas aisladas donde el navegador no puede acceder a localhost. TEST_ONLINE=1 agrega una prueba real con dos navegadores y el servicio público; requiere acceso WebRTC. El transporte simulado no sustituye una prueba entre redes físicas distintas.
@@ -110,6 +122,7 @@ Se revisan selección espejo, ambos teclados, CPU, poderes, pausa, ayuda, rutas 
 ## Estructura y procedencia
 
 - src/content.js: personajes, poderes y escenarios.
+- src/unlocks.js: código secreto y persistencia de los desbloqueos.
 - src/engine.js: simulación, rounds, daño, IA, recargas y clones.
 - src/original-art.js y src/sketch.js: dibujante y trazos originales.
 - src/render.js: composición lateral, poses y efectos.

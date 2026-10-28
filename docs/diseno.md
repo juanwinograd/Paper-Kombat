@@ -2,7 +2,7 @@
 
 ## Alcance
 
-Pelea cómica lateral con saltos para chicos de 9–10 años. Ocho integrantes del equipo de Aventura-Papel disponibles al comenzar. Enfrentamientos espejo permitidos. PC con tres dificultades, dos personas localmente y salas online por invitación. Teclado, táctil y mandos estándar. Escenarios decorativos: cuartel, cantera y laboratorio.
+Pelea cómica lateral con saltos para chicos de 9–10 años. Ocho integrantes del equipo de Aventura-Papel disponibles al comenzar, más tres personajes secretos. Enfrentamientos espejo permitidos. PC con tres dificultades, dos personas localmente y salas online por invitación. Teclado, táctil y mandos estándar. Escenarios decorativos: cuartel, cantera y laboratorio.
 
 Sin torneo. Victoria al ganar dos rounds de 60 segundos. Igualdad de vida al terminar el tiempo no otorga puntos. Vida inicial: 100.
 
@@ -19,7 +19,7 @@ Sin torneo. Victoria al ganar dos rounds de 60 segundos. Igualdad de vida al ter
 ## Adaptaciones autorizadas
 
 - Amaral: sol que ciega, neblina que oculta, viento que empuja y desvía.
-- Fabrizio: reflector, invisibilidad y picos; se elimina fiesta. Atacar lo revela.
+- Fabrizio: reflector, invisibilidad, picos y fiesta que hace bailar al rival sin control durante 2,5 segundos. Atacar lo revela.
 - Sebástian: espada, martillo y piedra arrojadiza en lugar de puentes.
 - Benicio: un clon, seis segundos, cinco puntos de daño, diez segundos de recarga, cae de un golpe.
 - Los demás mantienen las ideas originales, ajustadas al combate.
@@ -39,3 +39,9 @@ PeerJS 1.5.5 con señalización pública gratuita, WebRTC directo y STUN. No inc
 Archivos estáticos preparados para GitHub Pages desde main, raíz. No se modifica Aventura-Papel. La primera habilitación se realiza en Settings → Pages.
 
 Jugar en familia para revisar dificultad fácil, legibilidad en teléfonos pequeños, sensación de los saltos, latencia real y equilibrio. Las pruebas automáticas no sustituyen partidas humanas ni certifican todos los mandos o navegadores.
+
+## Personajes secretos y poderes nuevos
+
+Código Escuela Bavio 16 12, con barra en inicio y selección; desbloqueo persistente por navegador. Wis negro conserva la forma de Aarón Mamani, de color negro, y lanza tinta e invoca dos monstruos temporales de 4,5 segundos que caen de un golpe. La Máquina de bobadas conserva la idea de Vicente sin pelo ni torso, con cara y brazos largos; su ataque de risa dura cinco segundos y recarga en 18. Baltazar es una elipse violeta con cara, brazos y nariz cuadrada; lanza cuadrados y se camufla.
+
+La fiesta recarga en 14 segundos. Risa y fiesta tienen aviso, alcance 330 y se pueden cubrir o esquivar. Impiden movimiento, salto, golpe, defensa y poderes durante su efecto. El daño recibido se reduce al 50% y la inmunidad de control dura hasta tres segundos después de terminar, evitando cadenas continuas. Los estados e invocaciones se serializan para online y se conservan al reconectar.

@@ -24,6 +24,7 @@ export class Renderer extends Illustrator {
     if(f.invulnerable>0&&!this.reduced)c.globalAlpha*=.65+.25*Math.sin(time*35);
     const size=f.small>0?.68:1.4;
     c.scale(size,size);
+    if((f.laugh>0||f.dance>0)&&!this.reduced)c.rotate(Math.sin(time*(f.laugh>0?9:5))*.11);
     if(f.pose==='hurt')c.rotate(-.14);
     else if(['attack','punch','sword','hammer'].includes(f.pose))c.rotate(.08);
     else if(f.vy<0)c.rotate(-.06);
@@ -44,7 +45,18 @@ export class Renderer extends Illustrator {
     if(f.blind>0){this.text('✧',-17,-86,24,'#c18a14');this.text('✧',18,-77,20,'#c18a14');}
     if(f.wind>0)for(let i=0;i<3;i++)this.path([[-38,-90+i*25],[0,-104+i*25],[38,-90+i*25]],'#9baabd',2);
     c.restore();
-    if(!portrait){this.box(f.x-23,f.y+18,46,22,h.color,INK,1);this.text('J'+(f.side+1),f.x,f.y+35,17,INK,'center');}
+    if(f.pending&&['laugh','party'].includes(f.pending.kind))this.text(f.pending.kind==='laugh'?'¡Va una bobada!':'¡Se viene la fiesta!',f.x,f.y-162,19,h.dark,'center');
+    if(f.laugh>0||f.dance>0)this.text((f.laugh>0?'¡JA, JA! ':'¡A bailar! ')+Math.ceil(Math.max(f.laugh,f.dance))+' s',f.x,f.y-163,22,h.dark,'center');
+    if(!portrait){this.box(f.x-23,f.y+18,46,22,h.color,INK,1);this.text('J'+(f.side+1),f.x,f.y+35,17,f.hero===8?PAPER:INK,'center');}
+  }
+  drawInkMonster(monster,time){
+    const c=this.c;c.save();c.translate(monster.x,monster.y);
+    const bob=this.reduced?0:Math.sin(time*5+monster.id)*2;
+    this.path([[-23,1],[-20,-24],[-15,-35],[-18,-48],[-5,-41],[9,-45],[19,-57],[17,-35],[23,-22],[26,0],[12,-5],[3,3],[-6,-4],[-23,1]],'#171716',3,'#292827',true);
+    this.circle(-7,-27+bob,2,'#fffdf7',1,'#fffdf7');this.circle(7,-27+bob,2,'#fffdf7',1,'#fffdf7');
+    this.path([[-7,-17+bob],[0,-14+bob],[7,-18+bob]],'#fffdf7',2);
+    this.path([[-20,-23],[-35,-16],[-40,-7]],'#171716',4);this.path([[20,-23],[35,-16],[40,-7]],'#171716',4);
+    this.text('J'+(monster.side+1),0,21,14,'#171716','center');c.restore();
   }
   projectile(p){
     const c=this.c,color=HEROES[p.hero].color;c.save();c.translate(p.x,p.y);
@@ -53,6 +65,8 @@ export class Renderer extends Illustrator {
       case 'gift':this.gift(0,15,.9);break;
       case 'lightning':this.path([[-25,-18],[4,-5],[-2,-17],[24,9],[-7,1],[1,16]],'#d4a62c',4,'#ffe777',true);break;
       case 'time':this.circle(0,0,23,color,3,'#d4f4ec');this.line(0,0,0,-14,color,2);this.line(0,0,10,4,color,2);break;
+      case 'square':this.box(-16,-16,32,32,'#c7a4e9',color,3);break;
+      case 'ink':this.circle(0,0,16,'#171716',3,'#292827');this.path([[-Math.sign(p.vx)*13,-9],[-Math.sign(p.vx)*33,-3],[-Math.sign(p.vx)*12,8]],'#171716',3,'#292827',true);this.circle(4,-5,3,'#fffdf7',1,'#fffdf7');break;
       case 'stone':this.rock(0,8,20);break;
       case 'potato':this.circle(0,0,17,'#af773b',3,'#e4bd72');this.circle(-5,-5,2,'#9e713b',1);this.circle(6,4,2,'#9e713b',1);this.path([[9,-15],[14,-23],[22,-21]],INK,2);this.star(21,-23,7,'#d89b2d','#ffdf5f');break;
       case 'wind':for(let i=0;i<3;i++)this.path([[-28,-20+i*18],[5,-25+i*18],[26,-12+i*18],[12,-3+i*18]],'#91a5b8',3);break;
@@ -61,11 +75,16 @@ export class Renderer extends Illustrator {
   }
   render(s,viewer=0){
     this.background(s.stage,s.clock);
+    if(s.fighters.some(f=>f.party>0)){
+      this.c.save();this.c.globalAlpha=.12;
+      ['#e8759d','#9ecb52','#f3cd61'].forEach((color,i)=>this.path([[160+i*300,80],[40+i*300,440],[320+i*300,440]],color,1,color,true));
+      this.c.restore();this.text('♫  ¡FIESTA!  ♫',480,90,32,'#496d1e','center');
+    }
     for(const hazard of s.hazards){
       this.circle(hazard.x,190,43,'#73888c',2,'#d2e2e3');this.text('☁',hazard.x,204,60,'#637f89','center');
       this.path([[hazard.x-65,FLOOR+2],[hazard.x+65,FLOOR+2]],'#bf5b42',3);this.text('!',hazard.x,355,38,'#bf5b42','center');
     }
-    for(const clone of s.clones)this.drawFighter({...s.fighters[clone.side],...clone,hero:7,small:0,invisible:0,root:0,shield:0,reflect:0,slow:0,blind:0,guard:false,pose:'idle',pending:null,invulnerable:0,wind:0,facing:clone.x<s.fighters[1-clone.side].x?1:-1},s.clock,{clone:true});
+    for(const clone of s.clones){if(clone.kind==='ink'){this.drawInkMonster(clone,s.clock);continue;}this.drawFighter({...s.fighters[clone.side],...clone,hero:7,small:0,laugh:0,dance:0,party:0,invisible:0,root:0,shield:0,reflect:0,slow:0,blind:0,guard:false,pose:'idle',pending:null,invulnerable:0,wind:0,facing:clone.x<s.fighters[1-clone.side].x?1:-1},s.clock,{clone:true});}
     for(const f of s.fighters)this.drawFighter(f,s.clock);
     for(const p of s.projectiles)this.projectile(p);
     for(const e of s.effects){

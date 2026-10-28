@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#fffaf0">
-<meta name="description" content="Elegí a tu personaje de Aventura en Papel y peleá con un amigo o con la PC. Ocho héroes, superpoderes y mucha historieta.">
+<meta name="description" content="Elegí a tu personaje de Aventura en Papel y peleá con un amigo o con la PC. Superpoderes, personajes secretos y mucha historieta.">
 <title>Paper Kombat · Peleas de historieta</title>
 <link rel="icon" href="./assets/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="./src/style.css">
@@ -27,10 +27,12 @@
 <button class="mode-card" data-mode="local" style="--accent:#f29b8b"><span class="mode-number">02</span><span class="mode-symbol">⚔</span><strong>En la misma pantalla</strong><span>Dos amigos, una computadora.<br>Teclado compartido o mandos.</span><span class="mode-arrow">↗</span></button>
 <button class="mode-card" data-mode="online" style="--accent:#95d0c4"><span class="mode-number">03</span><span class="mode-symbol">⌁</span><strong>Con un amigo online</strong><span>Creá una sala, pasá el código.<br>¡Que empiece el encuentro!</span><span class="mode-arrow">↗</span></button>
 </div>
-<div class="roster-strip"><span class="roster-label">EL EQUIPO<br><b>8 personajes.<br>Tu elección.</b></span><div id="home-roster"></div></div>
+<div class="secret-panel"><form data-secret-form><label for="secret-code-home">Código secreto</label><div><input id="secret-code-home" data-secret-code type="text" placeholder="Escribí el código" maxlength="80" autocomplete="off" spellcheck="false"><button class="secondary" type="submit">Desbloquear</button></div><p data-secret-status role="status" aria-live="polite"></p></form></div>
+<div class="roster-strip"><span class="roster-label">EL EQUIPO<br><b><span id="hero-count">8 personajes.</span><br>Tu elección.</b></span><div id="home-roster"></div></div>
 </section>
 <section id="setup" class="screen" hidden>
 <div class="setup-heading"><button class="back" id="back">← Volver</button><span class="eyebrow" id="mode-label">CONTRA LA PC</span><h1 class="page-title">Elegí tu <span>personaje.</span></h1><p>Todos tienen un golpe, una defensa y algo muy suyo.</p></div>
+<div class="secret-panel"><form data-secret-form><label for="secret-code-setup">Código secreto</label><div><input id="secret-code-setup" data-secret-code type="text" placeholder="Escribí el código" maxlength="80" autocomplete="off" spellcheck="false"><button class="secondary" type="submit">Desbloquear</button></div><p data-secret-status role="status" aria-live="polite"></p></form></div>
 <div id="online-panel" class="online-panel" hidden>
 <div class="online-options" id="online-options"><button class="primary small" id="create-room">Crear sala</button><span>o</span><form id="join-form"><label class="sr-only" for="room-code">Código de sala</label><input id="room-code" placeholder="CÓDIGO DE SALA" maxlength="8" autocomplete="off" autocapitalize="characters" spellcheck="false" pattern="[A-Za-z2-9]{8}" required><button type="submit" class="secondary">Entrar</button></form></div>
 <div id="room-info" hidden><span>TU SALA</span> <strong id="room-display"></strong><button id="copy-room" class="secondary">Copiar invitación</button></div>
@@ -45,7 +47,7 @@
 <section id="arena" class="screen" hidden>
 <div class="fight-toolbar"><button class="back" id="exit-fight">← Salir</button><span id="fight-mode"></span><div><button class="secondary" id="fullscreen" aria-label="Pantalla completa">⛶</button><button class="secondary" id="pause">Ⅱ <span>Pausa</span></button></div></div>
 <div class="arena-frame">
-<div class="hud"><div class="fighter-hud" id="hud-0"><div class="fighter-heading"><span class="player-label">J1</span><strong></strong><span class="wins"></span></div><div class="health-track"><div class="health-fill"></div><span class="health-value"></span></div><div class="guard-track"><div></div></div></div><div class="timer"><strong id="timer">60</strong><span id="round">ROUND 1</span></div><div class="fighter-hud right" id="hud-1"><div class="fighter-heading"><span class="player-label">J2</span><strong></strong><span class="wins"></span></div><div class="health-track"><div class="health-fill"></div><span class="health-value"></span></div><div class="guard-track"><div></div></div></div></div>
+<div class="hud"><div class="fighter-hud" role="group" id="hud-0"><div class="fighter-heading"><span class="player-label">J1</span><strong></strong><span class="wins"></span></div><div class="health-track"><div class="health-fill"></div><span class="health-value"></span></div><div class="guard-track"><div></div></div></div><div class="timer"><strong id="timer">60</strong><span id="round">ROUND 1</span></div><div class="fighter-hud right" role="group" id="hud-1"><div class="fighter-heading"><span class="player-label">J2</span><strong></strong><span class="wins"></span></div><div class="health-track"><div class="health-fill"></div><span class="health-value"></span></div><div class="guard-track"><div></div></div></div></div>
 <canvas id="fight-canvas" width="960" height="540" role="img" aria-label="Arena de pelea. Usá los controles de abajo o el teclado."></canvas>
 <div id="fight-overlay" class="fight-overlay" hidden><div class="overlay-paper"><span class="eyebrow" id="overlay-eyebrow">UN RESPIRO</span><h2 id="overlay-title">Pausa</h2><p id="overlay-description"></p><button class="primary" id="resume">Seguir peleando</button><button class="secondary" id="rematch" hidden>Revancha ↻</button><button class="text-button" id="change-characters">Elegir personajes</button></div></div>
 </div>

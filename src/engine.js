@@ -5,14 +5,14 @@ export function cleanInput(input={}) {
 }
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 function fighter(hero,side) {
-  return {hero,side,x:side?700:260,y:FLOOR,vx:0,vy:0,facing:side?-1:1,hp:RULES.health,cds:[0,0,0,0],attackCd:0,stun:0,root:0,slow:0,blind:0,invisible:0,shield:0,reflect:0,small:0,wind:0,invulnerable:0,trapImmune:0,guard:false,guardMeter:100,pose:'idle',poseTime:0,prev:cleanInput(),pending:null};
+  return {hero,side,x:side?700:260,y:FLOOR,vx:0,vy:0,facing:side?-1:1,hp:RULES.health,cds:[0,0,0,0],attackCd:0,stun:0,root:0,slow:0,blind:0,laugh:0,dance:0,party:0,controlImmune:0,invisible:0,shield:0,reflect:0,small:0,wind:0,invulnerable:0,trapImmune:0,guard:false,guardMeter:100,pose:'idle',poseTime:0,prev:cleanInput(),pending:null};
 }
 export function createMatch(heroes=[0,1],stage=0) {
   if(!Array.isArray(heroes)||heroes.length!==2||!heroes.every(heroIndex)||!stageIndex(stage))throw Error('Selección inválida');
   return {fighters:heroes.map(fighter),stage,phase:'countdown',phaseTime:3.1,time:RULES.roundSeconds,round:1,wins:[0,0],winner:null,roundWinner:null,projectiles:[],clones:[],effects:[],hazards:[],clock:0,eventId:0,paused:false,pauseReason:''};
 }
 function effect(s,kind,x,y,color='',text='') {
-  s.effects.push({id:++s.eventId,kind,x,y,color,text,life:kind==='teleport'?.5:.65,maxLife:kind==='teleport'?.5:.65});
+  s.effects.push({id:++s.eventId,kind,x,y,color,text,life:kind==='party'?2.5:kind==='teleport'?.5:.65,maxLife:kind==='party'?2.5:kind==='teleport'?.5:.65});
   if(s.effects.length>35)s.effects.shift();
 }
 function animate(f,pose,time=.3){f.pose=pose;f.poseTime=time;}
@@ -22,7 +22,7 @@ function hit(s,from,to,damage,options={}) {
   if(to.shield>0){effect(s,'block',to.x,to.y-65,'#20b5d5','¡PLOP!');return false;}
   const frontal=(from.x-to.x)*to.facing>=-4;
   const guarded=to.guard && frontal && to.guardMeter>0;
-  const dealt=guarded?Math.max(1,Math.round(damage*.18)):damage;
+  const dealt=guarded?Math.max(1,Math.round(damage*.18)):(to.laugh>0||to.dance>0)?Math.max(1,Math.round(damage*.5)):damage;
   to.hp=clamp(to.hp-dealt,0,RULES.health);
   to.vx=(to.x>=from.x?1:-1)*(guarded?65:options.push??180);
   to.invulnerable=guarded?.22:.38;to.stun=guarded?.06:.17;
@@ -32,6 +32,7 @@ function hit(s,from,to,damage,options={}) {
     if(options.slow)to.slow=options.slow;
     if(options.blind)to.blind=options.blind;
     animate(to,'hurt',.24);
+    if(to.pending&&['party','laugh'].includes(to.pending.kind)){to.pending=null;to.root=0;}
   }
   effect(s,guarded?'block':'hit',to.x,to.y-65,HEROES[from.hero]?.color,guarded?'¡TAC!':['¡PAF!','¡PUM!','¡ZAS!'][s.eventId%3]);
   return true;
@@ -49,6 +50,7 @@ function power(s,f,index) {
   const p=HEROES[f.hero].powers[index];
   if(!p||f.cds[index]>0||f.pending)return;
   if(p.kind==='clone'&&s.clones.some(c=>c.side===f.side))return;
+  if(p.kind==='ink-monsters'&&s.clones.filter(c=>c.side===f.side).length>=2)return;
   f.cds[index]=p.cooldown;animate(f,p.kind,.4);f.invisible=0;
   effect(s,'cast',f.x,f.y-70,HEROES[f.hero].color);
   switch(p.kind) {
@@ -76,15 +78,34 @@ function power(s,f,index) {
     case 'sword': melee(s,f,15,150,{pose:'sword',duration:.35});break;
     case 'hammer': f.pending={time:.42,kind:'hammer'};f.root=.45;break;
     case 'stone': projectile(s,f,'stone',14,470,{r:18});break;
+    case 'ink': projectile(s,f,'ink',11,480,{r:16});break;
+    case 'square': projectile(s,f,'square',12,520,{r:16});break;
+    case 'camouflage': f.invisible=2.8;break;
+    case 'laugh': f.pending={time:.65,kind:'laugh'};f.root=.68;break;
+    case 'party': f.pending={time:.55,kind:'party'};f.root=.58;break;
+    case 'ink-monsters': {
+      const existing=s.clones.filter(c=>c.side===f.side).length;
+      for(let i=existing;i<2;i++)s.clones.push({id:++s.eventId,side:f.side,hero:f.hero,kind:'ink',x:clamp(f.x-f.facing*(45+i*35),50,910),y:FLOOR,life:4.5,attackCd:.7+i*.2});break;
+    }
     case 'clone': s.clones.push({id:++s.eventId,side:f.side,x:clamp(f.x-f.facing*65,50,910),y:FLOOR,life:6,attackCd:.7});break;
   }
 }
+function controlOpponent(s,f,kind,duration){
+  const to=target(s,f);
+  if(Math.abs(to.x-f.x)>330||Math.abs(to.y-f.y)>85)return;
+  if(to.shield>0||to.invulnerable>0||to.controlImmune>0||(to.guard&&(f.x-to.x)*to.facing>=-4)){
+    effect(s,'block',to.x,to.y-65,'#629ba3','¡ME CUBRO!');return;
+  }
+  to[kind]=duration;to.controlImmune=duration+3;to.vx=0;to.guard=false;to.pending=null;to.invisible=0;
+  if(kind==='dance')f.party=duration;
+  effect(s,kind==='dance'?'party':'laugh',to.x,to.y-80,HEROES[f.hero].color,kind==='dance'?'¡A BAILAR!':'¡JA, JA, JA!');
+}
 function advanceFighter(s,f,input,dt) {
-  for(const key of ['attackCd','stun','root','slow','blind','invisible','shield','reflect','small','wind','invulnerable','trapImmune','poseTime'])f[key]=Math.max(0,f[key]-dt);
+  for(const key of ['attackCd','stun','root','slow','blind','laugh','dance','party','controlImmune','invisible','shield','reflect','small','wind','invulnerable','trapImmune','poseTime'])f[key]=Math.max(0,f[key]-dt);
   f.cds=f.cds.map(cd=>Math.max(0,cd-dt));
   if(f.poseTime<=0)f.pose='idle';
-  if(f.pending){f.pending.time-=dt;if(f.pending.time<=0){f.pending=null;melee(s,f,24,150,{push:350,pose:'hammer',duration:.35});}}
-  const disabled=f.stun>0||f.root>0||f.shield>0||f.hp<=0;
+  if(f.pending){f.pending.time-=dt;if(f.pending.time<=0){const kind=f.pending.kind;f.pending=null;if(kind==='hammer')melee(s,f,24,150,{push:350,pose:'hammer',duration:.35});else controlOpponent(s,f,kind==='laugh'?'laugh':'dance',kind==='laugh'?5:2.5);}}
+  const disabled=f.stun>0||f.root>0||f.shield>0||f.laugh>0||f.dance>0||f.hp<=0;
   f.guard=input.block&&!disabled&&f.guardMeter>0&&f.y>=FLOOR;
   f.guardMeter=clamp(f.guardMeter+(f.guard?-13:22)*dt,0,100);
   if(!disabled) {
@@ -95,7 +116,7 @@ function advanceFighter(s,f,input,dt) {
     if(input.jump&&!f.prev.jump&&f.y>=FLOOR&&!f.guard){f.vy=-590;animate(f,'jump',.35);}
     if(input.attack&&!f.guard&&f.attackCd<=0){f.attackCd=f.hero===5?.34:.42;f.invisible=0;melee(s,f,f.small>0?5:8,94);}
     if(!f.guard)input.powers.forEach((pressed,i)=>{if(pressed&&!f.prev.powers[i])power(s,f,i);});
-  }else f.vx*=Math.exp(-12*dt);
+  }else if(f.dance>0)f.vx=Math.sin(s.clock*6+f.side)*65;else f.vx*=Math.exp(-12*dt);
   f.x=clamp(f.x+f.vx*dt,45,915);f.vy+=1550*dt;f.y=Math.min(FLOOR,f.y+f.vy*dt);if(f.y>=FLOOR)f.vy=0;
   f.prev=cleanInput(input);
 }
@@ -123,8 +144,8 @@ function updateClones(s,dt) {
   for(const c of s.clones) {
     c.life-=dt;c.attackCd-=dt;
     const owner=s.fighters[c.side],other=s.fighters[1-c.side],distance=other.x-c.x;
-    c.x=clamp(c.x+Math.sign(distance)*Math.min(Math.abs(distance),145*dt),45,915);
-    if(Math.abs(distance)<80&&Math.abs(other.y-FLOOR)<90&&c.attackCd<=0) {hit(s,{...owner,x:c.x},other,5,{push:80});c.attackCd=1.2;}
+    c.x=clamp(c.x+Math.sign(distance)*Math.min(Math.abs(distance),(c.kind==='ink'?125:145)*dt),45,915);
+    if(Math.abs(distance)<80&&Math.abs(other.y-FLOOR)<90&&c.attackCd<=0) {hit(s,{...owner,x:c.x},other,c.kind==='ink'?4:5,{push:80});c.attackCd=c.kind==='ink'?1.3:1.2;}
   }
   s.clones=s.clones.filter(c=>c.life>0);
 }
@@ -174,12 +195,12 @@ export function createAI(level='normal',random=Math.random) {
     const uncertain=other.invisible>0||f.blind>0;
     if(uncertain&&random()<.55)return held;
     if(dist>78){held.left=dx<0;held.right=dx>0;}
-    const threat=s.projectiles.some(p=>p.side!==side&&Math.abs(p.x-f.x)<210)||s.hazards.some(h=>h.side!==side&&Math.abs(h.x-f.x)<85);
+    const threat=(other.pending&&['party','laugh'].includes(other.pending.kind)&&dist<350)||s.projectiles.some(p=>p.side!==side&&Math.abs(p.x-f.x)<210)||s.hazards.some(h=>h.side!==side&&Math.abs(h.x-f.x)<85);
     held.block=(threat||dist<105&&other.poseTime>0)&&random()<(level==='easy'?.25:.65);
     if((threat||random()<.16)&&jumpCooldown<=0){held.jump=true;jumpCooldown=1.3;held.block=false;}
     held.attack=dist<103&&!held.block&&random()<(level==='easy'?.5:.9);
     if(!held.block&&!uncertain){
-      const candidates=HEROES[f.hero].powers.map((p,i)=>({p,i})).filter(({p,i})=>f.cds[i]<=0&&(!['punch','sword','hammer'].includes(p.kind)||dist<140)&&(!(p.kind==='stretch')||dist<270));
+      const candidates=HEROES[f.hero].powers.map((p,i)=>({p,i})).filter(({p,i})=>f.cds[i]<=0&&(!['punch','sword','hammer'].includes(p.kind)||dist<140)&&(!(p.kind==='stretch')||dist<270)&&(!['party','laugh'].includes(p.kind)||(dist<315&&other.controlImmune<=0)));
       if(candidates.length&&random()<(level==='easy'?.3:.65)){const chosen=candidates[Math.floor(random()*candidates.length)];held.powers[chosen.i]=true;}
     }
     return held;

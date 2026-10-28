@@ -42,7 +42,7 @@ test('códigos aleatorios y protocolo de sesión cerrado',()=>{
  for(let n=0;n<100;n++)assert.ok(validCode(makeCode()));
  assert.ok(!validCode('ABCD1234'));assert.ok(!validCode('abc'));
  assert.ok(validMessage({type:'hello',version:VERSION,session:makeSession()}));assert.ok(!validMessage({type:'hello',version:VERSION}));
- assert.ok(validMessage({type:'pick',hero:7}));assert.ok(!validMessage({type:'pick',hero:8}));
+ assert.ok(validMessage({type:'pick',hero:7}));assert.ok(!validMessage({type:'pick',hero:11}));
  assert.ok(!validMessage({type:'input',input:null}));assert.ok(!validMessage({type:'script',content:'alert(1)'}));
 });
 test('snapshots y recuperación validan estado antes de aceptarlo',()=>{
