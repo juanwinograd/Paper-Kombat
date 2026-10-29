@@ -41,7 +41,7 @@ body.playing .related-games{display:none}
 @media(max-width:640px){
  .related-games{margin:24px 17px 0;padding-top:19px}
  .related-games h2{font-size:10px;letter-spacing:.8px}
- .related-games-links{gap:13px;flex-wrap:nowrap}
+ .related-games-links{gap:13px;flex-wrap:wrap}
  .related-game{width:calc((100% - 13px)/2)}
  .related-game span{font-size:15px}
 }
