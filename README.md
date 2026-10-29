@@ -55,7 +55,7 @@ Referencias: [PeerJS FAQ](https://peerjs.com/client/faq), [PeerServer Cloud](htt
 
 La defensa frontal reduce el daño y gasta una barra que se recupera al soltarla. Saltar permite esquivar ataques. Los poderes se activan al pulsar; mantener el botón no los repite.
 
-**Teléfonos/tablets:** controles en pantalla. Conviene usar horizontal. Para dos amigos en un mismo teléfono hacen falta dos mandos; hay un solo conjunto de controles táctiles. Para dos teléfonos, usar online. En PC táctil los botones también aparecen.
+**Teléfonos/tablets:** joystick en pantalla: arrastrar hacia los lados para caminar, hacia arriba para saltar, o en diagonal para saltar avanzando. Al soltarlo se detiene el movimiento. Los botones permiten golpear, cubrirse y usar poderes al mismo tiempo que el joystick. Conviene usar horizontal. Para dos amigos en un mismo teléfono hacen falta dos mandos; hay un solo conjunto de controles táctiles. Para dos teléfonos, usar online. En PC táctil los botones también aparecen.
 
 **Mandos estándar:** palanca izquierda o cruceta para moverse; A/✕ para saltar; X/□ para golpear; B/○ para cubrirse. LB/L1, RB/R1, LT/L2 y RT/R2 activan los poderes. En local, primer y segundo mando controlan a cada jugador. La compatibilidad depende del navegador y mando.
 
@@ -113,11 +113,12 @@ npx playwright install chromium
 npm run test:browser
 npm run test:reconnect
 npm run test:secrets
+npm run test:touch
 ~~~
 
 CHROMIUM_PATH permite usar un Chrome instalado; PLAYWRIGHT_MODULE indica una instalación existente de Playwright. TEST_OFFLINE=1 sirve los recursos desde memoria para pruebas aisladas donde el navegador no puede acceder a localhost. TEST_ONLINE=1 agrega una prueba real con dos navegadores y el servicio público; requiere acceso WebRTC. El transporte simulado no sustituye una prueba entre redes físicas distintas.
 
-Se revisan selección espejo, ambos teclados, CPU, poderes, pausa, ayuda, rutas de Pages y tamaños 320, 390 y 768 px. La prueba test:reconnect recorre dos pestañas con un transporte de prueba: recarga del invitado, recarga del anfitrión, salir y volver con Atrás, recarga simultánea y continuidad del marcador. Esta prueba no contacta PeerJS ni certifica WebRTC entre redes externas. Las capturas de diagnóstico quedan en test-results/, ignoradas por Git.
+Se revisan selección espejo, ambos teclados, CPU, poderes, pausa, ayuda, rutas de Pages y tamaños 320, 390 y 768 px. La prueba test:reconnect recorre dos pestañas con un transporte de prueba: recarga del invitado, recarga del anfitrión, salir y volver con Atrás, recarga simultánea y continuidad del marcador. Esta prueba no contacta PeerJS ni certifica WebRTC entre redes externas. La prueba test:touch verifica con gestos táctiles el joystick, saltos diagonales, uso de dos dedos, cancelación, pausa, rotación, tamaños de pantalla y movimiento del invitado online con transporte de prueba. Las capturas de diagnóstico quedan en test-results/, ignoradas por Git.
 
 ## Estructura y procedencia
 

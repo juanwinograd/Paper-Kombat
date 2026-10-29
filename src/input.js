@@ -14,7 +14,8 @@ export class Controls {
     window.addEventListener('keyup',e=>this.keys.delete(e.code));
     window.addEventListener('blur',()=>this.clear());
     window.addEventListener('pointerup',e=>this.release(e.pointerId));
-    window.addEventListener('pointercancel',e=>this.release(e.pointerId));
+    window.addEventListener('pointercancel',e=>this.release(e.pointerId,true));
+    window.addEventListener('resize',()=>this.clear());
   }
   bind(button,action,side=null){
     button.addEventListener('pointerdown',e=>{
@@ -30,8 +31,44 @@ export class Controls {
     button.addEventListener('keyup',e=>{if(e.key===' '||e.key==='Enter')this.release('key-'+action);});
     button.addEventListener('blur',()=>this.release('key-'+action));
   }
+  bindJoystick(stick){
+    const knob=stick.querySelector('.touch-stick-knob');let pointer=null;
+    const position=e=>{
+      const held=this.pointers.get(pointer);if(!held)return;
+      if(this.getContext().blocked){this.release(pointer,true);return;}
+      const rect=stick.getBoundingClientRect(),radius=rect.width*.32;
+      let x=e.clientX-rect.left-rect.width/2,y=e.clientY-rect.top-rect.height/2;
+      const length=Math.hypot(x,y),scale=length>radius?radius/length:1;x*=scale;y*=scale;
+      knob.style.transform=`translate(${x}px,${y}px)`;
+      const actions=[];
+      if(length>=radius*.24){
+        if(x/radius<-.28)actions.push('left');else if(x/radius>.28)actions.push('right');
+        if(y/radius<-.55)actions.push('jump');
+      }
+      if(actions.includes('jump')&&!held.actions.includes('jump'))this.pulse(held.side,'jump');
+      held.actions=actions;stick.classList.toggle('moving',actions.length>0);
+    };
+    stick.addEventListener('pointerdown',e=>{
+      const ctx=this.getContext();
+      if(ctx.screen!=='arena'||ctx.blocked||pointer!==null||e.button>0)return;
+      e.preventDefault();pointer=e.pointerId;
+      this.pointers.set(pointer,{side:ctx.side,actions:[],button:stick,reset:()=>{
+        pointer=null;knob.style.transform='translate(0px,0px)';stick.classList.remove('moving');
+      }});
+      stick.setPointerCapture?.(pointer);position(e);
+    });
+    stick.addEventListener('pointermove',e=>{if(e.pointerId===pointer){e.preventDefault();position(e);}});
+    stick.addEventListener('pointerup',e=>this.release(e.pointerId));
+    for(const name of ['pointercancel','lostpointercapture'])stick.addEventListener(name,e=>this.release(e.pointerId,true));
+    stick.addEventListener('contextmenu',e=>e.preventDefault());
+  }
   pulse(side,action){if(action!=='block'&&action!=='left'&&action!=='right')this.pulses[side].set(action,performance.now()+140);}
-  release(id){const p=this.pointers.get(id);if(p){p.button.classList.remove('active');this.pointers.delete(id);}}
+  release(id,cancelled=false){
+    const p=this.pointers.get(id);if(!p)return;
+    this.pointers.delete(id);p.button.classList.remove('active');p.reset?.();
+    if(cancelled&&p.actions)this.pulses[p.side].delete('jump');
+    if(typeof id==='number'&&p.button.hasPointerCapture?.(id))p.button.releasePointerCapture(id);
+  }
   clear(){this.keys.clear();this.pulses.forEach(p=>p.clear());for(const id of [...this.pointers.keys()])this.release(id);}
   read(){
     const ctx=this.getContext(),out=[cleanInput(),cleanInput()];
@@ -41,7 +78,7 @@ export class Controls {
       const primary=MAPS[0][code];if(primary)assign(ctx.mode==='online'?ctx.side:0,primary);
       if(ctx.mode==='local'&&MAPS[1][code])assign(1,MAPS[1][code]);
     }
-    for(const {side,action}of this.pointers.values())assign(side,action);
+    for(const {side,action,actions}of this.pointers.values())for(const value of actions??[action])assign(side,value);
     this.pulses.forEach((p,side)=>{for(const [action,until]of p){if(until>performance.now())assign(side,action);else p.delete(action);}});
     const pads=Array.from(navigator.getGamepads?.()??[]).filter(Boolean);
     pads.slice(0,ctx.mode==='local'?2:1).forEach((p,i)=>{

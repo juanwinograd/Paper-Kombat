@@ -19,6 +19,7 @@ const coarse=matchMedia('(pointer:coarse)').matches||navigator.maxTouchPoints>0;
 document.body.classList.toggle('touch',coarse);
 const controls=new Controls(()=>({screen,mode,side:localSide,blocked:!$('help-dialog').open&&!!match?.paused||$('help-dialog').open||networkFailed||match?.phase==='matchOver'}),()=>togglePause());
 document.querySelectorAll('[data-action]').forEach(b=>controls.bind(b,b.dataset.action));
+controls.bindJoystick($('touch-stick'));
 function toast(message){$('toast').textContent=message;$('toast').hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').hidden=true,3800);}
 function show(next){
   screen=next;for(const name of ['home','setup','arena'])$(name).hidden=name!==next;
